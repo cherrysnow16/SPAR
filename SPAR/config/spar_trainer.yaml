@@ -1,0 +1,41 @@
+hydra:
+  searchpath:
+    - file://verl/trainer/config
+
+defaults:
+  - ppo_trainer
+  - _self_
+
+data:
+  gen_batch_size: ${data.train_batch_size}
+
+reward_model:
+  reward_manager: episode
+  overlong_buffer:
+    enable: False
+    len: 0
+    penalty_factor: 0.0
+    log: False
+
+algorithm:
+  adv_estimator: spar
+  gamma: 0.10
+  spar:
+    step_advantage_w: 1.0
+    episode_advantage_w: 1.0
+    mode: "mean_std_norm"
+  spar_belief_max_tokens: 2048
+  filter_groups:
+    enable: False
+    metric: null
+    max_num_gen_batches: 0
+
+env:
+  alfworld:
+    eval_dataset: eval_in_distribution
+
+trainer:
+  project_name: verl-spar
+  val_out: False
+  val_only: False
+  test_only: False
