@@ -309,6 +309,13 @@ class vLLMRollout(BaseRollout):
                 "temperature": self.config.val_kwargs.temperature,
                 "n": 1,  # if validate, already repeat in ray_trainer
             }
+        if "max_tokens" in prompts.meta_info:
+            # per-call generation budget (e.g. SPAR subgoal calls); policy rollouts keep response_length
+            kwargs["max_tokens"] = int(prompts.meta_info["max_tokens"])
+        if prompts.meta_info.get("json_schema") is not None:
+            from vllm.sampling_params import StructuredOutputsParams
+
+            kwargs["structured_outputs"] = StructuredOutputsParams(json=prompts.meta_info["json_schema"])
 
         lora_requests = None
         if self.lora_kwargs:

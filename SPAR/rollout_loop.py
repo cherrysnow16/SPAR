@@ -9,7 +9,7 @@ from transformers import PreTrainedTokenizer
 import uuid
 from verl.models.transformers.qwen2_vl import get_rope_index
 from SPAR.utils import process_image, to_list_of_dict, torch_to_numpy, filter_group_data
-from SPAR.core_spar import apply_spar
+from SPAR.core_spar import apply_spar, annotate_spar_beliefs
 from agent_system.environments import EnvironmentManagerBase
 from typing import List, Dict
 from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
@@ -52,6 +52,7 @@ class TrajectoryCollector:
         obs_text = obs_texts[item] if obs_texts is not None else None
         obs_image = obs_images[item] if obs_images is not None else None
         obs_anchor = obs_anchors[item] if obs_anchors is not None else None
+        obs_graphs = obs.get('graph', None)
         is_multi_modal = obs_image is not None
 
         _obs_anchor = torch_to_numpy(obs_anchor, is_object=True) if isinstance(obs_anchor, torch.Tensor) else obs_anchor
@@ -74,6 +75,10 @@ class TrajectoryCollector:
             add_generation_prompt=True,
             tokenize=False
         )
+        # Qwen3.5 templates pre-fill an empty think block; drop it so the policy writes <think>...</think><action>...</action> itself
+        empty_think = "<think>\n\n</think>\n\n"
+        if prompt_with_chat_template.endswith(empty_think):
+            prompt_with_chat_template = prompt_with_chat_template[:-len(empty_think)]
 
         row_dict = {}
 
@@ -142,6 +147,8 @@ class TrajectoryCollector:
             'index': item,
             'data_source': data_source
         })
+        if obs_graphs is not None:
+            row_dict['graph_obs'] = obs_graphs[item]
 
         if self.config.data.get('return_raw_chat', False):
             row_dict['raw_prompt'] = chat.tolist()
@@ -209,10 +216,14 @@ class TrajectoryCollector:
 
                     if (episode_rewards[bs]>0) and (_==len(total_batch_list[bs])-1):
                         data['next_obs']='success'
+                        if 'next_graph_obs' in data:
+                            data['next_graph_obs']='success'
                     effective_batch.append(data)
                 else:
                     if (episode_rewards[bs]>0) and (total_batch_list[bs][_-1]['active_masks']):
                         effective_batch[-1]['next_obs']='success'
+                        if 'next_graph_obs' in effective_batch[-1]:
+                            effective_batch[-1]['next_graph_obs']='success'
 
 
         gen_batch_output = DataProto.from_single_dict(
@@ -310,6 +321,8 @@ class TrajectoryCollector:
 
             next_obs_=next_obs.get('anchor', None)
             batch.non_tensor_batch['next_obs'] = torch_to_numpy(next_obs_, is_object=True) if isinstance(next_obs_, torch.Tensor) else next_obs_
+            if next_obs.get('graph', None) is not None:
+                batch.non_tensor_batch['next_graph_obs'] = np.array(next_obs['graph'], dtype=object)
             batch.non_tensor_batch["infos"] = np.asarray(infos, dtype=object)
 
 
@@ -419,9 +432,14 @@ class TrajectoryCollector:
 
 
         if self.config.algorithm.adv_estimator == "spar" and is_train:
-            total_batch_list = apply_spar(
-                total_batch_list, self.config, self.tokenizer, envs, actor_rollout_wg
-            )
+            if self.config.algorithm.spar.get("graph_backend", "rewardflow") == "graphgpo":
+                total_batch_list = annotate_spar_beliefs(
+                    total_batch_list, self.config, self.tokenizer, envs, actor_rollout_wg
+                )
+            else:
+                total_batch_list = apply_spar(
+                    total_batch_list, self.config, self.tokenizer, envs, actor_rollout_wg
+                )
 
         gen_batch_output: DataProto = self.gather_rollout_data(
             total_batch_list=total_batch_list,

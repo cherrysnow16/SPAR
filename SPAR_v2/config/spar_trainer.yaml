@@ -1,0 +1,57 @@
+hydra:
+  searchpath:
+    - file://verl/trainer/config
+
+defaults:
+  - ppo_trainer
+  - _self_
+
+data:
+  gen_batch_size: ${data.train_batch_size}
+
+reward_model:
+  reward_manager: episode
+  overlong_buffer:
+    enable: False
+    len: 0
+    penalty_factor: 0.0
+    log: False
+
+algorithm:
+  adv_estimator: spar
+  gamma: 0.10
+  spar:
+    step_advantage_w: 1.0
+    episode_advantage_w: 1.0
+    mode: "mean_std_norm"
+    subgoal_prompt: "default"  # default | legacy (SUBGOAL_*_PROMPT_TEMPLATE_LEGACY)
+    # self: each trajectory proposes its own subgoals; common: one shared list per uid-group, then per-trajectory assignment
+    subgoal_mode: "self"
+    subgoal_timing_compare: False  # run both modes on the same rollouts and log their time
+    subgoal_experiment: False  # run all subgoal prompt variants (SPAR/subgoal_variants.py) and dump outputs
+    # rewardflow: belief graph + reward-decay propagation (original SPAR)
+    # graphgpo: GraphGPO graph / shortest-path returns, graph nodes split by subgoal belief
+    graph_backend: "graphgpo"
+    # order_recent (v2): node subgoal = LSH-merged label of the most recently achieved own subgoal
+    #   (SPAR_v2/subgoal_order.py); a subgoal achieved by action o is attached from state o+1 on
+    # index: original SPAR per-trajectory subgoal index sets
+    belief_mode: "order_recent"
+    lsh_threshold: 0.6
+    normalize_distance: False  # graphgpo backend only, same meaning as algorithm.graphgpo.*
+    enable_similarity: False
+    similarity_thresh: 0.95
+  spar_belief_max_tokens: 1024  # subgoal responses are ~100-200 tokens; caps a runaway reasoning field
+  filter_groups:
+    enable: False
+    metric: null
+    max_num_gen_batches: 0
+
+env:
+  alfworld:
+    eval_dataset: eval_in_distribution
+
+trainer:
+  project_name: verl-spar
+  val_out: False
+  val_only: False
+  test_only: False

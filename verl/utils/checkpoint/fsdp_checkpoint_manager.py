@@ -194,7 +194,10 @@ class FSDPCheckpointManager(BaseCheckpointManager):
             if unwrap_model.can_generate() and hasattr(model_config, "name_or_path") and model_config.name_or_path:
                 # Some model's name_or_path is empty if not initialized from pretrained,
                 # in this cases, we don't save generation config.
-                generation_config = GenerationConfig.from_pretrained(model_config.name_or_path)
+                try:
+                    generation_config = GenerationConfig.from_pretrained(model_config.name_or_path)
+                except OSError:  # repo ships no generation_config.json (e.g. Qwen3.5)
+                    generation_config = GenerationConfig.from_model_config(model_config)
                 generation_config.save_pretrained(local_path)
             else:
                 generation_config = None
@@ -225,7 +228,10 @@ class FSDPCheckpointManager(BaseCheckpointManager):
 
                     auto_model_cls = AutoModelForCausalLM
                 elif "ForConditionalGeneration" in model_config.architectures[0]:
-                    from transformers import AutoModelForVision2Seq
+                    try:
+                        from transformers import AutoModelForVision2Seq
+                    except ImportError:  # transformers >= 5
+                        from transformers import AutoModelForImageTextToText as AutoModelForVision2Seq
 
                     auto_model_cls = AutoModelForVision2Seq
                 else:

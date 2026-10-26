@@ -989,7 +989,17 @@ class RayPPOTrainer:
                     batch = gen_batch_output
 
                     if self.config.algorithm.adv_estimator == AdvantageEstimator.SPAR:
-                        batch.batch['step_rewards'] = core_spar.compute_step_returns(batch)
+                        spar_cfg = self.config.algorithm.spar
+                        if spar_cfg.get("graph_backend", "rewardflow") == "graphgpo":
+                            batch.batch['step_rewards'] = core_spar.compute_graphgpo_step_returns(
+                                batch,
+                                gamma=self.config.algorithm.gamma,
+                                normalize_distance=spar_cfg.get("normalize_distance", False),
+                                enable_similarity=spar_cfg.get("enable_similarity", False),
+                                similarity_thresh=spar_cfg.get("similarity_thresh", 0.95),
+                            )
+                        else:
+                            batch.batch['step_rewards'] = core_spar.compute_step_returns(batch)
 
                     batch.batch["response_mask"] = compute_response_mask(batch)
 

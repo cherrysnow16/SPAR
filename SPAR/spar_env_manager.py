@@ -55,10 +55,14 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                 f"{text_obs_} {text_location_holding_} {text_item_location_} "
                 f"{','.join(sorted(commands))}")
 
+        # graph node text for the graphgpo backend: raw obs + location/holding + moving history
+        # (the anchor without the admissible-action list)
+        graph_out = list(new_text_obs)
+
         self.pre_text_obs = new_text_obs
         full_text_obs = self.build_text_obs(
             new_text_obs, self.envs.get_admissible_commands, init=True)
-        return {'text': full_text_obs, 'image': image_obs, 'anchor': anchor_out}, infos
+        return {'text': full_text_obs, 'image': image_obs, 'anchor': anchor_out, 'graph': graph_out}, infos
 
     def step(self, text_actions: List[str]):
         actions, valids = self.projection_f(text_actions, self.envs.get_admissible_commands)
@@ -88,7 +92,8 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
         for i, info in enumerate(infos):
             info['is_action_valid'] = to_numpy(valids[i])
 
-        next_observations = {'text': full_text_obs, 'image': image_obs, 'anchor': anchor_out}
+        graph_out = list(new_text_obs)
+        next_observations = {'text': full_text_obs, 'image': image_obs, 'anchor': anchor_out, 'graph': graph_out}
         rewards = to_numpy(rewards)
         dones = to_numpy(dones)
 

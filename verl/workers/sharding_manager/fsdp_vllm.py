@@ -245,8 +245,10 @@ class FSDPVLLMShardingManager(BaseShardingManager):
             "0.6.3",
         ):
             group = vllm_ps.get_tensor_model_parallel_group()
-        else:
+        elif hasattr(vllm_ps, "get_tensor_model_parallel_group"):
             group = vllm_ps.get_tensor_model_parallel_group().device_group
+        else:  # newer vllm only exposes get_tp_group
+            group = vllm_ps.get_tp_group().device_group
 
         all_gather_data_proto(data=data, process_group=group)
         return data

@@ -24,6 +24,17 @@ algorithm:
     step_advantage_w: 1.0
     episode_advantage_w: 1.0
     mode: "mean_std_norm"
+    subgoal_prompt: "default"  # default | legacy (SUBGOAL_*_PROMPT_TEMPLATE_LEGACY)
+    # self: each trajectory proposes its own subgoals; common: one shared list per uid-group, then per-trajectory assignment
+    subgoal_mode: "self"
+    subgoal_timing_compare: False  # run both modes on the same rollouts and log their time
+    subgoal_experiment: False  # run all subgoal prompt variants (SPAR/subgoal_variants.py) and dump outputs
+    # rewardflow: belief graph + reward-decay propagation (original SPAR)
+    # graphgpo: GraphGPO graph / shortest-path returns, graph nodes split by subgoal belief
+    graph_backend: "rewardflow"
+    normalize_distance: False  # graphgpo backend only, same meaning as algorithm.graphgpo.*
+    enable_similarity: False
+    similarity_thresh: 0.95
   spar_belief_max_tokens: 2048
   filter_groups:
     enable: False

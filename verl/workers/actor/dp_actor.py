@@ -207,6 +207,9 @@ class DataParallelPPOActor(BasePPOActor):
                 extra_args = {}
                 if self.use_fused_kernels:
                     extra_args["temperature"] = temperature
+                else:
+                    # only response positions are used; avoids full-sequence logits over a large vocab (248K for Qwen3.5)
+                    extra_args["logits_to_keep"] = response_length + 1
                 output = self.actor_module(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
