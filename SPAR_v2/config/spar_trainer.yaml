@@ -37,6 +37,8 @@ algorithm:
     # index: original SPAR per-trajectory subgoal index sets
     belief_mode: "order_recent"
     lsh_threshold: 0.6
+    # order_recent label: text = LSH-merged subgoal strings; action = derived from the action at the assigned step
+    subgoal_label: "text"
     normalize_distance: False  # graphgpo backend only, same meaning as algorithm.graphgpo.*
     enable_similarity: False
     similarity_thresh: 0.95
@@ -49,6 +51,7 @@ algorithm:
 env:
   alfworld:
     eval_dataset: eval_in_distribution
+    use_raw_obs_only: False  # True: policy prompt = GiGPO's (raw obs); graph nodes keep location/holding
 
 trainer:
   project_name: verl-spar

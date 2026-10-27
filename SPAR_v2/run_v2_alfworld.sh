@@ -6,19 +6,28 @@ ENGINE=${1:-vllm}
 if [[ $# -gt 0 ]]; then shift; fi
 
 export PYTHONPATH=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd):${PYTHONPATH:-}
-PYTHON=${PYTHON:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.venv-qwen35/bin/python}
-export ALFWORLD_DATA=${ALFWORLD_DATA:-$HOME/.cache/alfworld}
+PYTHON=${PYTHON:-/opt/conda/envs/graphgpo_qwen35/bin/python}
+export ALFWORLD_DATA=${ALFWORLD_DATA:-/workspace/alfworld_data}
 export WANDB_MODE=${WANDB_MODE:-online}
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0,1}
 
-MODEL_PATH=${MODEL_PATH:-Qwen/Qwen3.5-2B}
+MODEL_PATH=${MODEL_PATH:-Qwen/Qwen2.5-1.5B-Instruct}
 DATA_DIR=${DATA_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/data}
 CHECKPOINTS_DIR=${CHECKPOINTS_DIR:-./checkpoints}
 SUBGOAL_PROMPT=${SUBGOAL_PROMPT:-default}
 GRAPH_BACKEND=${GRAPH_BACKEND:-graphgpo}  # graphgpo | rewardflow
+SUBGOAL_LABEL=${SUBGOAL_LABEL:-action}  # action: label from the action at the assigned step | text: LSH-merged strings
 EXPERIMENT_NAME=${EXPERIMENT_NAME:-spar_v2_$(basename $MODEL_PATH)_alfworld_seed0}
 MAX_STEPS=${MAX_STEPS:-25}
+RAW_OBS_ONLY=${RAW_OBS_ONLY:-True}  # policy prompt identical to GiGPO
 TOTAL_EPOCHS=${TOTAL_EPOCHS:-100}
+
+# Qwen3.5-only model/engine options
+MODEL_ARGS=()
+if [[ $MODEL_PATH == *Qwen3.5* ]]; then
+    MODEL_ARGS=(+actor_rollout_ref.model.text_only=True
+                +actor_rollout_ref.rollout.engine_kwargs.vllm.gdn_prefill_backend=triton)
+fi
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -36,6 +45,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
     algorithm.spar.mode=mean_std_norm \
     algorithm.spar.subgoal_prompt=$SUBGOAL_PROMPT \
     algorithm.spar.graph_backend=$GRAPH_BACKEND \
+    algorithm.spar.subgoal_label=$SUBGOAL_LABEL \
     algorithm.use_kl_in_reward=False \
     data.train_files=$DATA_DIR/text/train.parquet \
     data.val_files=$DATA_DIR/text/test.parquet \
@@ -49,7 +59,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
     actor_rollout_ref.model.path=$MODEL_PATH \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=False \
-    +actor_rollout_ref.model.text_only=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=16 \
     actor_rollout_ref.actor.use_kl_loss=True \
@@ -66,7 +75,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
     actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.free_cache_engine=False \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.async_scheduling=False \
-    +actor_rollout_ref.rollout.engine_kwargs.vllm.gdn_prefill_backend=triton \
     actor_rollout_ref.rollout.max_model_len=4096 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.4 \
     actor_rollout_ref.rollout.val_kwargs.do_sample=True \
@@ -77,6 +85,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
     env.env_name=alfworld/AlfredTWEnv \
     env.seed=0 \
     env.max_steps=$MAX_STEPS \
+    env.alfworld.use_raw_obs_only=$RAW_OBS_ONLY \
     env.rollout.n=8 \
     env.resources_per_worker.num_cpus=0.1 \
     trainer.critic_warmup=0 \
@@ -85,9 +94,10 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
     trainer.experiment_name=$EXPERIMENT_NAME \
     trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \
-    trainer.save_freq=${SAVE_FREQ:-10} \
-    trainer.test_freq=5 \
+    trainer.save_freq=${SAVE_FREQ:-50} \
+    trainer.test_freq=10 \
     trainer.total_epochs=$TOTAL_EPOCHS \
-    trainer.val_before_train=False \
+    trainer.val_before_train=True \
     trainer.default_local_dir=$CHECKPOINTS_DIR/$EXPERIMENT_NAME \
+    "${MODEL_ARGS[@]}" \
     "$@"

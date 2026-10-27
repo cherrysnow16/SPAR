@@ -32,6 +32,9 @@ def set_gamefile(infos, gamefile):
 class AlfWorldEnvironmentManager(EnvironmentManagerBase):
     def __init__(self, envs, projection_f, config):
         self.memory = SimpleMemory()
+        # True: the policy prompt (current obs and history) uses the raw env text, identical to GiGPO;
+        # anchor/graph node text keeps location/holding/moving history either way
+        self._use_raw_obs_only = OmegaConf.select(config, 'env.alfworld.use_raw_obs_only', default=False)
         super().__init__(envs, projection_f, config)
 
     def reset(self, kwargs):
@@ -59,9 +62,10 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
         # (the anchor without the admissible-action list)
         graph_out = list(new_text_obs)
 
-        self.pre_text_obs = new_text_obs
+        text_obs_for_prompt = text_obs if self._use_raw_obs_only else new_text_obs
+        self.pre_text_obs = text_obs_for_prompt
         full_text_obs = self.build_text_obs(
-            new_text_obs, self.envs.get_admissible_commands, init=True)
+            text_obs_for_prompt, self.envs.get_admissible_commands, init=True)
         return {'text': full_text_obs, 'image': image_obs, 'anchor': anchor_out, 'graph': graph_out}, infos
 
     def step(self, text_actions: List[str]):
@@ -82,10 +86,11 @@ class AlfWorldEnvironmentManager(EnvironmentManagerBase):
                 f"{text_obs_} {text_location_holding_} {text_item_location_} "
                 f"{','.join(sorted(commands))}")
 
+        text_obs_for_prompt = text_obs if self._use_raw_obs_only else new_text_obs
         self.memory.store({'text_obs': self.pre_text_obs, 'action': actions})
-        self.pre_text_obs = new_text_obs
+        self.pre_text_obs = text_obs_for_prompt
 
-        full_text_obs = self.build_text_obs(new_text_obs, self.envs.get_admissible_commands)
+        full_text_obs = self.build_text_obs(text_obs_for_prompt, self.envs.get_admissible_commands)
         if infos[0].get("extra.gamefile") is None:
             infos = set_gamefile(infos, self.gamefile)
 
